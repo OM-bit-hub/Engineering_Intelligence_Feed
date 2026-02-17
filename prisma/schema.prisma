@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum SourceType {
+  rss_blog
+  rss_newsletter
+  github
+}
+
+model Builder {
+  id         String          @id @default(uuid())
+  name       String
+  short_bio  String?
+  is_active  Boolean         @default(true)
+  created_at DateTime        @default(now())
+  updated_at DateTime        @updatedAt
+
+  sources    BuilderSource[]
+
+  @@map("builders")
+}
+
+model BuilderSource {
+  id                String     @id @default(uuid())
+  builder           Builder    @relation(fields: [builder_id], references: [id], onDelete: Cascade)
+  builder_id        String
+  source_type       SourceType
+  source_identifier String      // RSS → full feed URL, GitHub → username
+  last_fetched_at   DateTime?
+  is_active         Boolean    @default(true)
+  created_at        DateTime   @default(now())
+
+  items             ContentItem[]
+
+  @@map("builder_sources")
+}
+
+model ContentItem {
+  id             String        @id @default(uuid())
+  source         BuilderSource @relation(fields: [source_id], references: [id], onDelete: Cascade)
+  source_id      String
+  title          String
+  url            String        @unique
+  raw_content    String?
+  published_at   DateTime
+  content_hash   String        @unique
+  status         String        @default("pending")
+
+  processed_item ProcessedItem?
+
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  @@index([published_at])
+  @@index([status])
+  @@map("content_items")
+}
+
+model ProcessedItem {
+  id              String      @id @default(uuid())
+  content_item    ContentItem @relation(fields: [content_item_id], references: [id], onDelete: Cascade)
+  content_item_id String      @unique
+
+  summary         String
+  why_it_matters  String?
+  what_to_try     String?
+
+  scores_json     Json
+  overall_score   Float
+
+  priority_flags  String[]
+  confidence      Float?
+
+  processed_at    DateTime    @default(now())
+
+  @@index([overall_score])
+  @@index([priority_flags], type: Gin)
+  @@map("processed_items")
+}
+
+model WeeklyIntelligence {
+  id                    String   @id @default(uuid())
+  week_start            DateTime @unique
+  top_items_json        String
+  trend_summary         String
+  strategic_experiments String
+  published_to_slack    Boolean  @default(false)
+  created_at            DateTime @default(now())
+
+  @@map("weekly_intelligence")
+}
+
+model SystemSettings {
+  id                 String  @id @default("settings")
+  automation_enabled Boolean @default(true)
+  manual_override    Boolean @default(false)
+
+  @@map("system_settings")
+}
